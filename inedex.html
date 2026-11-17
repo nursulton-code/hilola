@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>For you</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Manrope:wght@800&display=swap">
+<style>
+:root{color-scheme:dark;--bg:#0b0610;--text:#ffe3ec;--rose:#ff4d85;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b0610}}
+:root[data-theme="dark"]{--bg:#0b0610}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%;background:radial-gradient(ellipse at 50% 40%,#1d0a22,var(--bg) 75%);color:var(--text);font-family:Manrope,system-ui,sans-serif;overflow:hidden}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:pointer}
+#cap{position:fixed;left:0;right:0;bottom:12vh;text-align:center;font-size:.95rem;color:#e9bfd0;letter-spacing:.04em;transition:opacity 1s;pointer-events:none;animation:br 2.2s infinite}
+@keyframes br{50%{opacity:.45}}
+#cap.off{opacity:0}
+#msg{position:fixed;left:0;right:0;bottom:calc(6vh + env(safe-area-inset-bottom,0px));padding:0 1.5rem;text-align:center;font-size:1rem;line-height:1.7;color:var(--text);opacity:0;transition:opacity 2.5s;pointer-events:none}
+#msg.on{opacity:1}
+#again{position:fixed;top:calc(1rem + env(safe-area-inset-top,0px));right:1rem;background:rgba(255,77,133,.15);border:1px solid var(--rose);color:var(--text);font:inherit;font-weight:800;font-size:.8rem;padding:.55rem 1rem;border-radius:999px;cursor:pointer;opacity:0;visibility:hidden;transition:opacity 1s}
+#again.on{opacity:1;visibility:visible}
+#again:focus-visible{outline:3px solid #ffd9a0;outline-offset:3px}
+#snd{position:fixed;top:calc(1rem + env(safe-area-inset-top,0px));left:1rem;background:rgba(255,77,133,.15);border:1px solid var(--rose);color:var(--text);font-size:1rem;width:2.6rem;height:2.6rem;border-radius:50%;cursor:pointer;opacity:0;visibility:hidden;transition:opacity 1s}
+#snd.on{opacity:1;visibility:visible}
+#snd:focus-visible{outline:3px solid #ffd9a0;outline-offset:3px}
+</style>
+</head>
+<body>
+<canvas id="c" aria-label="Zarralardan hosil boʻlgan konvert, ism va atirgul"></canvas>
+<p id="cap">Ochish uchun bos</p>
+<p id="msg"></p>
+<audio id="au" src="song.m4a" loop preload="auto"></audio>
+<button id="snd" aria-label="Ovozni oʻchirish/yoqish">🔊</button>
+<button id="again">Qayta koʻrish</button>
+<script>
+/* ===== SHU YERNI OʻZGARTIRING ===== */
+const NAME = "Hilola";
+const TEXT = "Senga atab, butun yuragim bilan.";
+/* ================================== */
+const cv=document.getElementById("c"),ctx=cv.getContext("2d");
+const cap=document.getElementById("cap"),msg=document.getElementById("msg"),again=document.getElementById("again");
+msg.textContent=TEXT;
+let W,H,DPR,phase=0,t0=performance.now(),last=t0,mx=-999,my=-999,timers=[];
+const N=innerWidth<640?1700:2600,P=[];
+const rnd=(a,b)=>a+Math.random()*(b-a);
+for(let i=0;i<N;i++)P.push({x:rnd(0,innerWidth),y:rnd(0,innerHeight),vx:0,vy:0,tx:0,ty:0,r:255,g:255,b:255,R:255,G:255,B:255,a:.8,k:rnd(.6,1.4),s:rnd(1.2,2.4),ang:rnd(0,6.28),rad:Math.sqrt(Math.random()),sp:rnd(.6,1.6),ph:rnd(0,6.28),role:0});
+const dust=[];for(let i=0;i<120;i++)dust.push({x:Math.random(),y:Math.random(),r:rnd(.3,1.2),p:rnd(0,6.28)});
+
+function size(){DPR=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);assign(phase)}
+function sample(draw,step){
+  const o=document.createElement("canvas");o.width=W;o.height=H;const c=o.getContext("2d");draw(c);
+  const d=c.getImageData(0,0,W,H).data,out=[];step=step||2;
+  for(let y=0;y<H;y+=step)for(let x=0;x<W;x+=step){const i=(y*W+x)*4;if(d[i+3]>110)out.push({x:x+rnd(-.6,.6),y:y+rnd(-.6,.6),r:d[i],g:d[i+1],b:d[i+2]})}
+  return out;
+}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function heart(c,x,y,s){c.beginPath();c.moveTo(x,y+s*.35);c.bezierCurveTo(x-s,y-s*.3,x-s*.55,y-s*1.05,x,y-s*.45);c.bezierCurveTo(x+s*.55,y-s*1.05,x+s,y-s*.3,x,y+s*.35);c.fill()}
+function nameFit(scale){const c=document.createElement("canvas").getContext("2d");let f=200;c.font=f+'px "Great Vibes",cursive';const w=c.measureText(NAME).width;return Math.min(f,f*(W*.86)/w)*scale}
+function drawName(c,cy,scale){const f=nameFit(scale);c.font=f+'px "Great Vibes",cursive';c.textAlign="center";c.textBaseline="middle";c.fillStyle="#ffd3e1";c.fillText(NAME,W/2,cy)}
+
+function pointsEnvelope(){
+  const ew=Math.min(W*.74,400),eh=ew*.64,cx=W/2,cy=H*.44,l=cx-ew/2,r=cx+ew/2,t=cy-eh/2,b=cy+eh/2;
+  return sample(c=>{
+    c.lineWidth=3;c.strokeStyle="#ffe8cc";c.strokeRect(l,t,ew,eh);
+    c.beginPath();c.moveTo(l,t);c.lineTo(cx,cy+eh*.08);c.lineTo(r,t);c.moveTo(l,b);c.lineTo(cx-ew*.14,cy+eh*.02);c.moveTo(r,b);c.lineTo(cx+ew*.14,cy+eh*.02);c.stroke();
+    c.fillStyle="#ff5c93";heart(c,cx,cy+eh*.02,ew*.07);
+    c.fillStyle="#fff";c.font='800 '+ew*.1+'px Manrope,sans-serif';c.textAlign="center";c.textBaseline="middle";
+    if("letterSpacing" in c)c.letterSpacing=ew*.02+"px";c.fillText("FOR YOU",cx,cy+eh*.27);
+  },3);
+}
+function pointsName(cy,scale){return sample(c=>drawName(c,cy,scale),2)}
+function pointsRose(){
+  const cx=W/2,R=Math.min(W*.2,95),hy=H*.27,stem=H*.55,out=[];
+  for(let i=0;i<1100;i++){
+    const th=rnd(0,6.283),rho=Math.sqrt(Math.random()),k=1+.2*Math.sin(6*th+rho*9)+.1*Math.sin(3*th);
+    const x=cx+Math.cos(th)*rho*k*R*.95,y=hy+Math.sin(th)*rho*k*R*.85+rho*rho*R*.12;
+    const m=.45+rho*.55;out.push({x,y,r:255,g:Math.round(60+90*(1-m)),b:Math.round(130+60*m)});
+  }
+  for(let i=0;i<260;i++){const y=rnd(hy+R*.7,stem);out.push({x:cx+Math.sin(y*.04)*1.5+rnd(-1.5,1.5),y,r:60,g:225,b:180})}
+  for(const sd of[-1,1])for(let i=0;i<150;i++){
+    const u=Math.random(),v=rnd(-1,1),lx=u*R*.75*sd,ly=-Math.pow(u,1.2)*R*.35;
+    out.push({x:cx+lx+v*3,y:hy+R*1.7+ly*-.2+u*R*.15+Math.sin(u*3.14)*v*R*.12,r:60,g:225,b:180});
+  }
+  return out;
+}
+function give(list,items,role){
+  shuffle(items);let j=0;
+  list.forEach(p=>{const q=items[j++%items.length];p.tx=q.x;p.ty=q.y;p.R=q.r;p.G=q.g;p.B=q.b;p.role=role});
+}
+function assign(ph){
+  if(ph===0){give(P,pointsEnvelope(),0);P.forEach(p=>p.a=.85)}
+  if(ph===2){give(P,pointsName(H*.5,1),2);P.forEach(p=>p.a=.9)}
+  if(ph===3){
+    const nm=pointsName(H*.74,.62),rose=pointsRose(),a=shuffle(P.slice()),cut=Math.floor(N*.4);
+    give(a.slice(0,cut),nm,3);give(a.slice(cut),rose,4);P.forEach(p=>p.a=.9);
+  }
+}
+function go(ph){phase=ph;t0=performance.now();if(ph===1){P.forEach(p=>{const a=rnd(0,6.28),s=rnd(4,16);p.vx+=Math.cos(a)*s;p.vy+=Math.sin(a)*s;p.R=255;p.G=rnd(30,90);p.B=rnd(70,120)})}else assign(ph)}
+const au=document.getElementById("au"),snd=document.getElementById("snd");
+function playSong(){au.volume=0;au.play().then(()=>{snd.classList.add("on");let v=0;const iv=setInterval(()=>{v=Math.min(.9,v+.03);au.volume=v;if(v>=.9)clearInterval(iv)},120)}).catch(()=>{snd.classList.add("on")})}
+snd.onclick=()=>{if(au.paused){au.volume=.9;au.play();snd.textContent="🔊"}else{au.pause();snd.textContent="🔇"}};
+function start(){
+  if(phase!==0)return;cap.classList.add("off");playSong();go(1);
+  timers.push(setTimeout(()=>go(2),2800),setTimeout(()=>go(3),6800),setTimeout(()=>{msg.classList.add("on");again.classList.add("on")},9500));
+}
+function reset(){timers.forEach(clearTimeout);timers=[];msg.classList.remove("on");again.classList.remove("on");P.forEach(p=>{p.vx+=rnd(-8,8);p.vy+=rnd(-8,8)});cap.classList.remove("off");go(0)}
+cv.addEventListener("pointerdown",start);
+cv.addEventListener("pointermove",e=>{mx=e.clientX;my=e.clientY});
+cv.addEventListener("pointerleave",()=>{mx=my=-999});
+again.onclick=reset;
+document.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" ")start()});
+
+function frame(now){
+  const dt=Math.min(2,(now-last)/16.7);last=now;const t=now/1000;
+  ctx.clearRect(0,0,W,H);
+  for(const s of dust){ctx.globalAlpha=.15+.4*Math.abs(Math.sin(t*.7+s.p));ctx.fillStyle="#ffdce8";ctx.fillRect(s.x*W,s.y*H,s.r,s.r)}
+  const vc=W/2,vy=H*.44,VR=Math.min(W*.42,230);
+  ctx.globalCompositeOperation="lighter";
+  for(const p of P){
+    if(phase===1){p.ang+=.035*p.sp*dt/Math.max(.35,p.rad);const rr=.35+p.rad*.65;p.tx=vc+Math.cos(p.ang)*rr*VR;p.ty=vy+Math.sin(p.ang)*rr*VR*.36}
+    const k=(phase===1?.018:.022)*p.k;
+    p.vx=(p.vx+(p.tx-p.x)*k*dt)*Math.pow(.86,dt);p.vy=(p.vy+(p.ty-p.y)*k*dt)*Math.pow(.86,dt);
+    const dx=p.x-mx,dy=p.y-my,d2=dx*dx+dy*dy;
+    if(d2<5000){const f=(5000-d2)/5000*2.2;p.vx+=dx/Math.sqrt(d2+1)*f;p.vy+=dy/Math.sqrt(d2+1)*f}
+    p.x+=p.vx*dt;p.y+=p.vy*dt;
+    p.r+=(p.R-p.r)*.07;p.g+=(p.G-p.g)*.07;p.b+=(p.B-p.b)*.07;
+    let al=p.a*(.65+.35*Math.sin(t*2.2+p.ph));
+    if(phase===0)al*=.9+.1*Math.sin(t*5+p.ph);
+    ctx.globalAlpha=al;ctx.fillStyle="rgb("+(p.r|0)+","+(p.g|0)+","+(p.b|0)+")";
+    ctx.fillRect(p.x,p.y,p.s,p.s);
+  }
+  ctx.globalCompositeOperation="source-over";
+  requestAnimationFrame(frame);
+}
+size();addEventListener("resize",size);
+(document.fonts&&document.fonts.load?Promise.all([document.fonts.load('100px "Great Vibes"'),document.fonts.load('800 20px Manrope')]).catch(()=>{}):Promise.resolve()).then(()=>{assign(phase)});
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
